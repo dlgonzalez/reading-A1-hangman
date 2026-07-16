@@ -1,0 +1,648 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Reading Hangman</title>
+<link href="https://fonts.googleapis.com/css2?family=Fredoka+One&family=Nunito:wght@400;600;700;800&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0d1b2a;
+    --card: #1b2a3b;
+    --card2: #162030;
+    --teal: #2dd4bf;
+    --yellow: #fcd34d;
+    --coral: #fb7185;
+    --purple: #a78bfa;
+    --green: #34d399;
+    --text: #e2e8f0;
+    --muted: #64748b;
+    --border: #2d4a62;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: 'Nunito', sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 16px 12px;
+    background-image: radial-gradient(ellipse at 10% 90%, #2dd4bf18 0%, transparent 50%),
+                      radial-gradient(ellipse at 90% 10%, #a78bfa18 0%, transparent 50%);
+  }
+
+  h1 {
+    font-family: 'Fredoka One', cursive;
+    font-size: 2rem;
+    letter-spacing: 1px;
+    text-align: center;
+    background: linear-gradient(135deg, var(--teal), var(--yellow));
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    margin-bottom: 2px;
+  }
+  .subtitle { color: var(--muted); font-size: 0.82rem; text-align: center; margin-bottom: 12px; }
+
+  /* Story selector */
+  .story-nav {
+    display: flex; gap: 8px; flex-wrap: wrap; justify-content: center;
+    margin-bottom: 12px;
+  }
+  .story-btn {
+    background: var(--card2); border: 2px solid var(--border); border-radius: 50px;
+    padding: 6px 16px; font-family: 'Nunito', sans-serif; font-size: 0.8rem; font-weight: 700;
+    color: var(--muted); cursor: pointer; transition: all 0.2s;
+  }
+  .story-btn:hover { border-color: var(--teal); color: var(--teal); }
+  .story-btn.active { border-color: var(--teal); background: #2dd4bf18; color: var(--teal); }
+
+  .main-layout {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 12px;
+    width: 100%;
+    max-width: 640px;
+  }
+
+  /* Reading phase */
+  .reading-phase {
+    width: 100%; display: flex; flex-direction: column; align-items: center; gap: 14px;
+  }
+  .passage-card {
+    background: var(--card);
+    border: 2px solid var(--teal);
+    border-radius: 16px;
+    padding: 18px 22px;
+    width: 100%;
+    animation: fade-in 0.4s ease;
+  }
+  @keyframes fade-in { from{opacity:0;transform:translateY(8px)} to{opacity:1;transform:translateY(0)} }
+  .passage-title {
+    font-family: 'Fredoka One', cursive;
+    font-size: 1.1rem;
+    color: var(--yellow);
+    margin-bottom: 10px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .passage-text {
+    font-size: 0.93rem;
+    line-height: 1.8;
+    color: var(--text);
+  }
+  .passage-text b { color: var(--teal); }
+
+  /* Timer bar */
+  .timer-wrap {
+    width: 100%; background: var(--card); border-radius: 12px;
+    padding: 12px 18px; border: 2px solid var(--border);
+    display: flex; align-items: center; gap: 14px;
+  }
+  .timer-label { font-weight: 800; font-size: 0.85rem; color: var(--muted); white-space: nowrap; }
+  .timer-bar-bg { flex:1; height: 10px; background: var(--border); border-radius: 99px; overflow: hidden; }
+  .timer-bar-fill {
+    height: 100%; width: 100%; border-radius: 99px;
+    background: linear-gradient(90deg, var(--teal), var(--yellow));
+    transition: width 1s linear, background 1s;
+  }
+  .timer-bar-fill.urgent { background: linear-gradient(90deg, var(--coral), var(--yellow)); }
+  .timer-num { font-family: 'Fredoka One', cursive; font-size: 1.3rem; color: var(--teal); min-width: 36px; text-align: right; }
+  .timer-num.urgent { color: var(--coral); }
+
+  .btn-ready {
+    padding: 12px 32px; border-radius: 50px; border: none;
+    background: var(--teal); color: #0d1b2a;
+    font-family: 'Nunito', sans-serif; font-weight: 800; font-size: 1rem;
+    cursor: pointer; transition: all 0.2s;
+  }
+  .btn-ready:hover { transform: scale(1.05); box-shadow: 0 0 16px #2dd4bf60; }
+
+  /* Hide transition */
+  .passage-card.hiding {
+    animation: hide-story 0.5s ease forwards;
+  }
+  @keyframes hide-story {
+    0%  { opacity:1; transform: scale(1); }
+    100%{ opacity:0; transform: scale(0.95); }
+  }
+
+  /* Hangman drawing area */
+  .hangman-wrap {
+    display: flex;
+    gap: 16px;
+    align-items: flex-start;
+    width: 100%;
+  }
+
+  .hangman-svg-box {
+    flex-shrink: 0;
+  }
+  svg#hangman { display: block; }
+
+  .game-area { flex: 1; display: flex; flex-direction: column; gap: 12px; }
+
+  .question-box {
+    background: var(--card2);
+    border: 2px solid var(--purple);
+    border-radius: 12px;
+    padding: 12px 16px;
+  }
+  .q-label { font-size: 0.7rem; font-weight: 800; text-transform: uppercase; letter-spacing: 2px; color: var(--purple); margin-bottom: 6px; }
+  .q-text { font-size: 0.95rem; font-weight: 700; line-height: 1.4; }
+
+  .word-display {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    justify-content: center;
+  }
+  .letter-slot {
+    width: 30px; height: 36px;
+    border-bottom: 3px solid var(--teal);
+    display: flex; align-items: flex-end; justify-content: center;
+    font-family: 'Fredoka One', cursive; font-size: 1.3rem;
+    color: var(--teal);
+    transition: color 0.2s;
+    padding-bottom: 2px;
+  }
+  .letter-slot.space { border-bottom-color: transparent; }
+  .letter-slot.revealed { color: var(--green); }
+  .letter-slot.wrong-reveal { color: var(--coral); }
+
+  .keyboard {
+    display: flex; flex-wrap: wrap; gap: 5px; justify-content: center;
+  }
+  .key {
+    width: 32px; height: 32px;
+    background: var(--card2); border: 2px solid var(--border);
+    border-radius: 8px; font-family: 'Fredoka One', cursive;
+    font-size: 0.9rem; color: var(--text); cursor: pointer;
+    transition: all 0.15s; display: flex; align-items: center; justify-content: center;
+  }
+  .key:hover:not(:disabled) { border-color: var(--teal); background: #2dd4bf15; transform: scale(1.08); }
+  .key:disabled { opacity: 0.3; cursor: default; }
+  .key.hit { border-color: var(--green); background: #34d39918; color: var(--green); }
+  .key.miss { border-color: var(--coral); background: #fb718518; color: var(--coral); }
+
+  .status-row {
+    display: flex; align-items: center; justify-content: space-between;
+  }
+  .lives-row { display: flex; gap: 4px; font-size: 1.2rem; }
+  .mistakes-count { font-size: 0.82rem; color: var(--muted); }
+
+  .feedback-bar {
+    text-align: center; font-weight: 800; font-size: 0.95rem; padding: 8px 14px;
+    border-radius: 8px; display: none;
+  }
+  .feedback-bar.show-win { display: block; background: #34d39920; color: var(--green); border: 1px solid var(--green); }
+  .feedback-bar.show-lose { display: block; background: #fb718520; color: var(--coral); border: 1px solid var(--coral); }
+
+  .q-counter {
+    text-align: center; font-size: 0.8rem; color: var(--muted);
+  }
+
+  .btn {
+    padding: 10px 24px; border-radius: 50px; border: none;
+    font-family: 'Nunito', sans-serif; font-weight: 800; font-size: 0.95rem;
+    cursor: pointer; transition: all 0.2s; display: inline-block;
+  }
+  .btn-next { background: var(--yellow); color: #0d1b2a; }
+  .btn-next:hover { transform: scale(1.05); box-shadow: 0 0 14px #fcd34d50; }
+  .btn-restart { background: var(--teal); color: #0d1b2a; }
+  .btn-restart:hover { transform: scale(1.05); box-shadow: 0 0 14px #2dd4bf50; }
+
+  .center { text-align: center; }
+
+  .score-badge {
+    background: var(--card2); border: 2px solid var(--border);
+    border-radius: 50px; padding: 5px 16px;
+    font-weight: 800; font-size: 0.85rem;
+    display: inline-flex; gap: 14px;
+  }
+  .score-badge span:first-child { color: var(--green); }
+  .score-badge span:last-child { color: var(--coral); }
+
+  .story-complete {
+    text-align: center; padding: 20px; display: none;
+    animation: pop-in 0.4s ease;
+  }
+  @keyframes pop-in { from{opacity:0;transform:scale(0.8)} to{opacity:1;transform:scale(1)} }
+  .complete-emoji { font-size: 3rem; margin-bottom: 8px; }
+  .complete-title { font-family: 'Fredoka One', cursive; font-size: 1.6rem; color: var(--yellow); margin-bottom: 6px; }
+  .complete-sub { color: var(--muted); margin-bottom: 16px; font-size: 0.9rem; }
+</style>
+</head>
+<body>
+
+<h1>📖 Reading Hangman</h1>
+<div class="subtitle">Read the story carefully — then the story hides and the game begins!</div>
+
+<div style="display:flex;gap:10px;align-items:center;margin-bottom:10px;">
+  <div class="score-badge">
+    <span id="total-correct">✅ 0 correct</span>
+    <span id="total-wrong">❌ 0 wrong</span>
+  </div>
+</div>
+
+<div class="story-nav" id="story-nav"></div>
+
+<div class="main-layout">
+
+  <!-- PHASE 1: Reading -->
+  <div class="reading-phase" id="reading-phase">
+    <div class="passage-card" id="passage-card">
+      <div class="passage-title"><span id="story-icon">📚</span><span id="story-title">Loading...</span></div>
+      <div class="passage-text" id="passage-text"></div>
+    </div>
+    <div class="timer-wrap" id="timer-wrap">
+      <div class="timer-label">⏱ Reading time</div>
+      <div class="timer-bar-bg"><div class="timer-bar-fill" id="timer-bar"></div></div>
+      <div class="timer-num" id="timer-num">60</div>
+    </div>
+    <button class="btn-ready" onclick="startGame()">✅ I'm ready — Start the game!</button>
+  </div>
+
+  <!-- PHASE 2: Story complete screen -->
+  <div class="story-complete" id="story-complete">
+    <div class="complete-emoji" id="comp-emoji"></div>
+    <div class="complete-title" id="comp-title"></div>
+    <div class="complete-sub" id="comp-sub"></div>
+    <button class="btn btn-restart" onclick="nextStory()">▶ Next Story</button>
+    <button class="btn btn-next" style="background:var(--border);color:var(--text)" onclick="resetStory()">🔄 Try Again</button>
+  </div>
+
+  <!-- PHASE 3: Game -->
+  <div id="game-section" style="display:none; width:100%">
+    <div class="hangman-wrap">
+      <div class="hangman-svg-box">
+        <svg id="hangman" width="110" height="140" viewBox="0 0 110 140">
+          <!-- Gallows -->
+          <line x1="10" y1="135" x2="90" y2="135" stroke="#2dd4bf" stroke-width="4" stroke-linecap="round"/>
+          <line x1="25" y1="135" x2="25" y2="10" stroke="#2dd4bf" stroke-width="4" stroke-linecap="round"/>
+          <line x1="25" y1="10" x2="65" y2="10" stroke="#2dd4bf" stroke-width="4" stroke-linecap="round"/>
+          <line x1="65" y1="10" x2="65" y2="28" stroke="#2dd4bf" stroke-width="3" stroke-linecap="round"/>
+          <!-- Body parts - hidden initially -->
+          <circle id="hm-head" cx="65" cy="38" r="10" fill="none" stroke="#fb7185" stroke-width="3" opacity="0"/>
+          <line id="hm-body" x1="65" y1="48" x2="65" y2="85" stroke="#fb7185" stroke-width="3" stroke-linecap="round" opacity="0"/>
+          <line id="hm-larm" x1="65" y1="58" x2="48" y2="72" stroke="#fb7185" stroke-width="3" stroke-linecap="round" opacity="0"/>
+          <line id="hm-rarm" x1="65" y1="58" x2="82" y2="72" stroke="#fb7185" stroke-width="3" stroke-linecap="round" opacity="0"/>
+          <line id="hm-lleg" x1="65" y1="85" x2="50" y2="105" stroke="#fb7185" stroke-width="3" stroke-linecap="round" opacity="0"/>
+          <line id="hm-rleg" x1="65" y1="85" x2="80" y2="105" stroke="#fb7185" stroke-width="3" stroke-linecap="round" opacity="0"/>
+        </svg>
+      </div>
+
+      <div class="game-area">
+        <div class="status-row">
+          <div class="lives-row" id="lives-row">❤️❤️❤️❤️❤️❤️</div>
+          <div class="mistakes-count" id="mistakes-count">0 / 6 wrong</div>
+        </div>
+
+        <div class="question-box">
+          <div class="q-label">❓ Question <span id="q-num">1</span> / <span id="q-total">5</span></div>
+          <div class="q-text" id="q-text">Loading...</div>
+        </div>
+
+        <div class="word-display" id="word-display"></div>
+
+        <div class="feedback-bar" id="feedback-bar"></div>
+      </div>
+    </div>
+
+    <div class="keyboard" id="keyboard"></div>
+
+    <div class="center" style="margin-top:10px">
+      <button class="btn btn-next" id="btn-next" style="display:none" onclick="nextQuestion()">Next Question ➡</button>
+    </div>
+  </div>
+</div>
+
+<script>
+const stories = [
+  {
+    id: 0,
+    icon: '🏠',
+    title: 'Tom\'s Daily Routine',
+    passage: `Tom is a student. He <b>gets up</b> at 7 o'clock every day. First, he <b>has</b> breakfast — he <b>eats</b> toast and <b>drinks</b> orange juice. Then he <b>goes</b> to school by bus. Tom <b>lives</b> near the school, but he <b>doesn't walk</b> — he <b>loves</b> the bus!<br><br>At school, Tom <b>studies</b> English and Maths. He <b>has</b> lunch with his friends at 12:30. After school, he <b>plays</b> football in the park. In the evening, Tom <b>does</b> his homework and <b>watches</b> TV. He <b>goes</b> to bed at 10pm.`,
+    questions: [
+      { q: "What time does Tom get up?", answer: "SEVEN", hint: "Look at the time in the text!" },
+      { q: "What does Tom drink for breakfast?", answer: "JUICE", hint: "It is a fruit drink — orange ___" },
+      { q: "How does Tom go to school?", answer: "BUS", hint: "He loves it but doesn't walk..." },
+      { q: "What sport does Tom play after school?", answer: "FOOTBALL", hint: "He plays in the park!" },
+      { q: "What does Tom do in the evening? (one thing)", answer: "HOMEWORK", hint: "Students do this at home..." },
+    ]
+  },
+  {
+    id: 1,
+    icon: '🐱',
+    title: 'Lucy and Her Cat',
+    passage: `Lucy <b>is</b> twelve years old. She <b>has</b> a cat called Milo. Milo <b>is</b> white and orange. He <b>sleeps</b> a lot — about 16 hours a day! He <b>doesn't like</b> water, but he <b>loves</b> fish.<br><br>Every morning, Lucy <b>gives</b> Milo his food. Milo <b>eats</b> quickly and then <b>sits</b> on the sofa. Lucy <b>doesn't let</b> him go outside — the street is busy. In the afternoon, Milo <b>plays</b> with his toys. He <b>runs</b> fast and <b>jumps</b> high! At night, Milo <b>sleeps</b> on Lucy's bed.`,
+    questions: [
+      { q: "How old is Lucy?", answer: "TWELVE", hint: "A number between 11 and 13" },
+      { q: "What is the cat's name?", answer: "MILO", hint: "It starts with M!" },
+      { q: "What colour is the cat? (one colour)", answer: "WHITE", hint: "White and ___orange" },
+      { q: "How many hours does Milo sleep?", answer: "SIXTEEN", hint: "About ___ hours a day — a big number!" },
+      { q: "Where does Milo sleep at night?", answer: "BED", hint: "He sleeps on Lucy's ___" },
+    ]
+  },
+  {
+    id: 2,
+    icon: '🍕',
+    title: 'A Day at the Restaurant',
+    passage: `Maria <b>works</b> in a restaurant. She <b>starts</b> work at 9am. Every day, she <b>prepares</b> the tables and <b>puts</b> flowers on them. The restaurant <b>opens</b> at 12pm.<br><br>Maria <b>takes</b> orders from the customers. The restaurant <b>serves</b> Italian food — pizza, pasta, and salad. Most customers <b>love</b> the pizza! Maria <b>speaks</b> three languages: English, Spanish, and Italian. This <b>helps</b> her talk to different customers.<br><br>The restaurant <b>closes</b> at 10pm. Maria <b>doesn't drive</b> home — she <b>takes</b> the bus. She <b>arrives</b> home at 11pm and <b>goes</b> to bed quickly!`,
+    questions: [
+      { q: "What time does Maria start work?", answer: "NINE", hint: "9am — what is the word for 9?" },
+      { q: "What does Maria put on the tables?", answer: "FLOWERS", hint: "Beautiful things from a garden..." },
+      { q: "What type of food does the restaurant serve?", answer: "ITALIAN", hint: "Pizza and pasta are ___ food" },
+      { q: "How many languages does Maria speak?", answer: "THREE", hint: "English, Spanish and Italian = ___ languages" },
+      { q: "How does Maria go home?", answer: "BUS", hint: "She doesn't drive — she takes the ___" },
+    ]
+  },
+  {
+    id: 3,
+    icon: '⚽',
+    title: 'The Football Team',
+    passage: `Jake <b>plays</b> for the school football team. They <b>practise</b> every Tuesday and Thursday after school. The team <b>has</b> twelve players.<br><br>Jake <b>is</b> the goalkeeper. He <b>doesn't run</b> a lot, but he <b>jumps</b> and <b>catches</b> the ball. His friend Sam <b>is</b> the best player — he <b>scores</b> many goals!<br><br>The team <b>wears</b> blue shirts and black shorts. They <b>don't have</b> a lot of money, so the school <b>pays</b> for their equipment. Their coach <b>is</b> Mr. Brown. He <b>shouts</b> a lot, but the players <b>like</b> him. They <b>win</b> most of their games!`,
+    questions: [
+      { q: "When does the team practise? (one day)", answer: "TUESDAY", hint: "Tuesday and ___Thursday" },
+      { q: "How many players does the team have?", answer: "TWELVE", hint: "Count them: twelve = 12" },
+      { q: "What position does Jake play?", answer: "GOALKEEPER", hint: "He jumps and catches the ball in the goal!" },
+      { q: "What colour are the team's shirts?", answer: "BLUE", hint: "Blue shirts and black shorts" },
+      { q: "What is the coach's name? (surname only)", answer: "BROWN", hint: "Mr. ___" },
+    ]
+  },
+  {
+    id: 4,
+    icon: '🌍',
+    title: 'My Friend from Brazil',
+    passage: `My name is Anna and my best friend is Sofia. Sofia <b>comes from</b> Brazil, but she <b>lives</b> in England now. She <b>speaks</b> Portuguese at home and English at school.<br><br>Sofia <b>loves</b> dancing. She <b>goes</b> to dance classes every Saturday morning. She <b>doesn't watch</b> much TV — she <b>prefers</b> to dance or listen to music.<br><br>Sofia's family <b>eats</b> Brazilian food at home. Her mum <b>cooks</b> rice and beans almost every day. Sofia <b>says</b> Brazilian food is the best in the world! She <b>misses</b> Brazil sometimes, but she <b>is</b> very happy in England.`,
+    questions: [
+      { q: "Where does Sofia come from?", answer: "BRAZIL", hint: "A big country in South America..." },
+      { q: "What language does Sofia speak at home?", answer: "PORTUGUESE", hint: "The language of Brazil!" },
+      { q: "What does Sofia love doing?", answer: "DANCING", hint: "She goes to ___ classes" },
+      { q: "When does Sofia go to dance classes?", answer: "SATURDAY", hint: "She goes every ___ morning" },
+      { q: "What food does Sofia's mum cook?", answer: "RICE", hint: "Rice and ___beans — one of the two!" },
+    ]
+  },
+  {
+    id: 5,
+    icon: '🏥',
+    title: 'Dr. Patel\'s Job',
+    passage: `Dr. Patel <b>is</b> a doctor. She <b>works</b> in a big hospital in the city. Every day, she <b>wakes up</b> at 5:30am because her job <b>starts</b> early.<br><br>At work, Dr. Patel <b>talks</b> to patients and <b>helps</b> them feel better. She <b>doesn't have</b> much free time at work — she <b>is</b> very busy! She <b>eats</b> lunch in 15 minutes.<br><br>Dr. Patel <b>loves</b> her job, but it <b>is</b> sometimes difficult. After work, she <b>goes</b> to the gym three times a week. She <b>says</b> exercise <b>helps</b> her relax. On weekends, she <b>reads</b> books and <b>spends</b> time with her family.`,
+    questions: [
+      { q: "What is Dr. Patel's job?", answer: "DOCTOR", hint: "She works in a hospital!" },
+      { q: "What time does she wake up?", answer: "FIVE", hint: "5:30am — what number is 5?" },
+      { q: "Where does Dr. Patel eat lunch?", answer: "WORK", hint: "She eats at ___ — she has no time to go out!" },
+      { q: "What does she do after work? (3 times a week)", answer: "GYM", hint: "She goes to the ___ to exercise" },
+      { q: "What does she do on weekends? (one activity)", answer: "READS", hint: "She ___ books — what is the verb?" },
+    ]
+  },
+];
+
+const MAX_WRONG = 6;
+const bodyParts = ['hm-head','hm-body','hm-larm','hm-rarm','hm-lleg','hm-rleg'];
+const READ_SECONDS = 60;
+
+let currentStory = 0;
+let currentQ = 0;
+let wrongCount = 0;
+let guessedLetters = new Set();
+let questionDone = false;
+let totalCorrect = 0;
+let totalWrong = 0;
+let timerInterval = null;
+let secondsLeft = READ_SECONDS;
+
+// ── Story nav ──────────────────────────────────────────────
+function buildStoryNav() {
+  const nav = document.getElementById('story-nav');
+  nav.innerHTML = '';
+  stories.forEach((s, i) => {
+    const btn = document.createElement('button');
+    btn.className = 'story-btn' + (i === currentStory ? ' active' : '');
+    btn.textContent = s.icon + ' ' + s.title;
+    btn.onclick = () => loadStory(i);
+    nav.appendChild(btn);
+  });
+}
+
+// ── Load story → show reading phase ───────────────────────
+function loadStory(idx) {
+  currentStory = idx;
+  currentQ = 0;
+  buildStoryNav();
+  const s = stories[idx];
+  document.getElementById('story-icon').textContent = s.icon;
+  document.getElementById('story-title').textContent = s.title;
+  document.getElementById('passage-text').innerHTML = s.passage;
+  document.getElementById('q-total').textContent = s.questions.length;
+
+  // Show reading phase, hide others
+  document.getElementById('reading-phase').style.display = 'flex';
+  document.getElementById('game-section').style.display = 'none';
+  document.getElementById('story-complete').style.display = 'none';
+  document.getElementById('passage-card').classList.remove('hiding');
+
+  startTimer();
+}
+
+// ── Countdown timer ────────────────────────────────────────
+function startTimer() {
+  clearInterval(timerInterval);
+  secondsLeft = READ_SECONDS;
+  updateTimerUI();
+  timerInterval = setInterval(() => {
+    secondsLeft--;
+    updateTimerUI();
+    if (secondsLeft <= 0) {
+      clearInterval(timerInterval);
+      startGame();
+    }
+  }, 1000);
+}
+
+function updateTimerUI() {
+  const pct = (secondsLeft / READ_SECONDS) * 100;
+  const bar = document.getElementById('timer-bar');
+  const num = document.getElementById('timer-num');
+  bar.style.width = pct + '%';
+  const urgent = secondsLeft <= 10;
+  bar.className = 'timer-bar-fill' + (urgent ? ' urgent' : '');
+  num.className  = 'timer-num'       + (urgent ? ' urgent' : '');
+  num.textContent = secondsLeft;
+}
+
+// ── Transition: hide story → show game ────────────────────
+function startGame() {
+  clearInterval(timerInterval);
+  const card = document.getElementById('passage-card');
+  card.classList.add('hiding');
+  setTimeout(() => {
+    document.getElementById('reading-phase').style.display = 'none';
+    document.getElementById('game-section').style.display = 'block';
+    loadQuestion();
+  }, 500);
+}
+
+// ── Game logic ─────────────────────────────────────────────
+function loadQuestion() {
+  wrongCount = 0;
+  guessedLetters = new Set();
+  questionDone = false;
+
+  bodyParts.forEach(id => document.getElementById(id).setAttribute('opacity','0'));
+
+  const q = stories[currentStory].questions[currentQ];
+  document.getElementById('q-num').textContent = currentQ + 1;
+  document.getElementById('q-text').textContent = q.q;
+
+  const feedback = document.getElementById('feedback-bar');
+  feedback.className = 'feedback-bar';
+  feedback.textContent = '';
+  document.getElementById('btn-next').style.display = 'none';
+
+  updateLives();
+  renderWord();
+  buildKeyboard();
+}
+
+function renderWord() {
+  const answer = stories[currentStory].questions[currentQ].answer;
+  const display = document.getElementById('word-display');
+  display.innerHTML = '';
+  answer.split('').forEach(ch => {
+    const slot = document.createElement('div');
+    if (ch === ' ') {
+      slot.className = 'letter-slot space';
+    } else {
+      slot.className = 'letter-slot';
+      if (guessedLetters.has(ch) || questionDone) {
+        slot.textContent = ch;
+        slot.classList.add('revealed');
+      }
+    }
+    display.appendChild(slot);
+  });
+}
+
+function buildKeyboard() {
+  const kb = document.getElementById('keyboard');
+  kb.innerHTML = '';
+  'ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split('').forEach(letter => {
+    const btn = document.createElement('button');
+    btn.className = 'key';
+    btn.textContent = letter;
+    btn.id = 'key-' + letter;
+    if (guessedLetters.has(letter)) {
+      const answer = stories[currentStory].questions[currentQ].answer;
+      btn.classList.add(answer.includes(letter) ? 'hit' : 'miss');
+      btn.disabled = true;
+    }
+    btn.onclick = () => guessLetter(letter, btn);
+    kb.appendChild(btn);
+  });
+}
+
+function guessLetter(letter, btn) {
+  if (questionDone) return;
+  guessedLetters.add(letter);
+  btn.disabled = true;
+  const answer = stories[currentStory].questions[currentQ].answer;
+  if (answer.includes(letter)) {
+    btn.classList.add('hit');
+    renderWord();
+    if (isWordComplete()) winQuestion();
+  } else {
+    btn.classList.add('miss');
+    wrongCount++;
+    updateHangman();
+    updateLives();
+    if (wrongCount >= MAX_WRONG) loseQuestion();
+  }
+}
+
+function isWordComplete() {
+  const answer = stories[currentStory].questions[currentQ].answer;
+  return answer.split('').filter(c => c !== ' ').every(c => guessedLetters.has(c));
+}
+
+function updateHangman() {
+  if (wrongCount > 0 && wrongCount <= bodyParts.length)
+    document.getElementById(bodyParts[wrongCount-1]).setAttribute('opacity','1');
+}
+
+function updateLives() {
+  const remaining = MAX_WRONG - wrongCount;
+  document.getElementById('lives-row').textContent = '❤️'.repeat(remaining) + '🖤'.repeat(wrongCount);
+  document.getElementById('mistakes-count').textContent = `${wrongCount} / ${MAX_WRONG} wrong`;
+}
+
+function winQuestion() {
+  questionDone = true; totalCorrect++;
+  updateTotalScores();
+  const fb = document.getElementById('feedback-bar');
+  fb.className = 'feedback-bar show-win';
+  fb.textContent = '🎉 Correct! Great reading!';
+  showNext();
+}
+
+function loseQuestion() {
+  questionDone = true; totalWrong++;
+  updateTotalScores();
+  const answer = stories[currentStory].questions[currentQ].answer;
+  answer.split('').forEach(c => guessedLetters.add(c));
+  renderWord();
+  document.querySelectorAll('.letter-slot').forEach(s => {
+    s.classList.remove('revealed'); s.classList.add('wrong-reveal');
+  });
+  const hint = stories[currentStory].questions[currentQ].hint;
+  const fb = document.getElementById('feedback-bar');
+  fb.className = 'feedback-bar show-lose';
+  fb.textContent = `❌ The answer was: ${answer} — 💡 ${hint}`;
+  showNext();
+}
+
+function showNext() {
+  const btn = document.getElementById('btn-next');
+  const last = currentQ >= stories[currentStory].questions.length - 1;
+  btn.textContent = last ? 'See Results 🏆' : 'Next Question ➡';
+  btn.style.display = 'inline-block';
+}
+
+function nextQuestion() {
+  if (currentQ < stories[currentStory].questions.length - 1) {
+    currentQ++;
+    loadQuestion();
+  } else {
+    showStoryComplete();
+  }
+}
+
+function showStoryComplete() {
+  document.getElementById('game-section').style.display = 'none';
+  const pct = Math.round((totalCorrect / (totalCorrect + totalWrong)) * 100) || 0;
+  const emoji = pct >= 80 ? '🏆' : pct >= 50 ? '👍' : '💪';
+  const msg   = pct >= 80 ? 'Excellent work!' : pct >= 50 ? 'Good job! Keep practising!' : 'Keep reading — you\'ll improve!';
+  document.getElementById('comp-emoji').textContent = emoji;
+  document.getElementById('comp-title').textContent = `Story Finished! ${pct}% correct`;
+  document.getElementById('comp-sub').textContent   = msg;
+  document.getElementById('story-complete').style.display = 'block';
+}
+
+function nextStory() { loadStory((currentStory + 1) % stories.length); }
+function resetStory() { loadStory(currentStory); }
+
+function updateTotalScores() {
+  document.getElementById('total-correct').textContent = `✅ ${totalCorrect} correct`;
+  document.getElementById('total-wrong').textContent   = `❌ ${totalWrong} wrong`;
+}
+
+// Init
+buildStoryNav();
+loadStory(0);
+</script>
+</body>
+</html>
